@@ -80,7 +80,29 @@
       <groupId>io.jans</groupId>
       <artifactId>jans-orm-sql</artifactId>
     </dependency>
+
+    <dependency>
+      <groupId>io.jans</groupId>
+      <artifactId>jans-orm-spanner</artifactId>
+    </dependency>
     <!-- end jans dependencies -->
+
+    <!-- db dependencies -->
+    <dependency>
+      <groupId>com.couchbase.client</groupId>
+      <artifactId>java-client</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>com.github.jsqlparser</groupId>
+      <artifactId>jsqlparser</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>com.google.cloud</groupId>
+      <artifactId>google-cloud-spanner</artifactId>
+    </dependency>
+    <!-- end db dependencies -->
 
     <!-- log adapter -->
     <dependency>

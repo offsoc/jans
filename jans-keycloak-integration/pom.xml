@@ -46,6 +46,9 @@
       <openapi-generator-plugin.version>7.2.0</openapi-generator-plugin.version>
       <jackson-datatype-jsr310.version>2.16.1</jackson-datatype-jsr310.version>
       <jackson-databind.version>2.16.1</jackson-databind.version>
+      <couchbase-client.version>3.4.4</couchbase-client.version>
+      <jsqlparser.version>4.5</jsqlparser.version>
+      <spanner-client.version>6.39.0</spanner-client.version>
       <sonar.projectKey>JanssenProject_keycloak-integ</sonar.projectKey>
       <sonar.moduleKey>${project.groupId}:${project.artifactId}</sonar.moduleKey>
       <sonar.organization>janssenproject</sonar.organization>
@@ -320,10 +323,36 @@
 
         <dependency>
           <groupId>io.jans</groupId>
+          <artifactId>jans-orm-spanner</artifactId>
+          <version>${jans.version}</version>
+        </dependency>
+
+        <dependency>
+          <groupId>io.jans</groupId>
           <artifactId>jans-core-service</artifactId>
           <version>${jans.version}</version>
         </dependency>
         <!-- end jans dependencies -->
+
+        <!-- db dependencies -->
+        <dependency>
+          <groupId>com.couchbase.client</groupId>
+          <artifactId>java-client</artifactId>
+          <version>${couchbase-client.version}</version>
+        </dependency>
+
+        <dependency>
+          <groupId>com.github.jsqlparser</groupId>
+          <artifactId>jsqlparser</artifactId>
+          <version>${jsqlparser.version}</version>
+        </dependency>
+
+        <dependency>
+          <groupId>com.google.cloud</groupId>
+          <artifactId>google-cloud-spanner</artifactId>
+          <version>${spanner-client.version}</version>
+        </dependency>
+        <!-- end db dependencies -->
       </dependencies>
     </dependencyManagement>
 
