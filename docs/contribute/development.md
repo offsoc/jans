@@ -116,6 +116,17 @@ This section shows how to run Fido2 server, for example
 
 3. Configure new Jetty Webapp run configuration. Here are screenshots:
 ![Config webapp](../assets/local-run-IDE-config-webapp.png)
+
+```
+-Djdk.internal.httpclient.disableHostnameVerification=true
+-Djetty.sslContext.sniRequired=false
+-Djetty.ssl.sniHostCheck=false
+-Djetty.ssl.snirequired=false
+-Djans.base=/home/remote/etc/jans
+-Dlog.base=/home
+-Dpython.home=/home/remote/jython-2.7.3
+```
+
 ![Config args](../assets/local-run-IDE-config-args.png)
 ![Config options](../assets/local-run-IDE-config-options.png)
 ![Config dependencies](../assets/local-run-IDE-config-dependencies.png)
