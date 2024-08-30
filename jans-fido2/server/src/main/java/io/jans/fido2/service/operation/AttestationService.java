@@ -121,7 +121,13 @@ public class AttestationService {
 		PublicKeyCredentialCreationOptions credentialCreationOptions = new PublicKeyCredentialCreationOptions();
 		// Put attestation
 		AttestationConveyancePreference attestationConveyancePreference = commonVerifiers.verifyAttestationConveyanceType(attestationOptions);
-		credentialCreationOptions.setAttestation(attestationConveyancePreference);
+		// set attestation - enterprise, none, direct
+		boolean enterpriseAttestation = appConfiguration.getFido2Configuration().isEnterpriseAttestation();
+		if (enterpriseAttestation) {
+			credentialCreationOptions.setAttestation(AttestationConveyancePreference.enterprise);
+		} else {
+			credentialCreationOptions.setAttestation(attestationConveyancePreference);
+		}
 		log.debug("Put attestation {}", attestationConveyancePreference);
 
 		// Put authenticatorSelection

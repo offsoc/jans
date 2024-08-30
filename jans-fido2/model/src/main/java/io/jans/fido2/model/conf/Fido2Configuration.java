@@ -53,6 +53,8 @@ public class Fido2Configuration {
     private boolean skipValidateMdsInAttestationEnabled = false;
     @DocProperty(description = "Boolean value indicating whether the assertion custom endpoint (used especially in passkey) is enabled.")
     private boolean assertionOptionsGenerateEndpointEnabled = false;
+    @DocProperty(description = "If authenticators have been enabled for use in a specific protected envt (enterprise authenticators)")
+    private boolean enterpriseAttestation = false;
 
     public String getAuthenticatorCertsFolder() {
         return authenticatorCertsFolder;
@@ -171,5 +173,13 @@ public class Fido2Configuration {
 
     public void setMetadataServers(List<MetadataServer> metadataServers) {
         this.metadataServers = metadataServers;
+    }
+
+    public boolean isEnterpriseAttestation() {
+        return enterpriseAttestation;
+    }
+
+    public void setEnterpriseAttestation(boolean enterpriseOnly) {
+        this.enterpriseAttestation = enterpriseOnly;
     }
 }

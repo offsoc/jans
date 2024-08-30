@@ -42,6 +42,7 @@
       "metadataUrlsProvider":"",
       "disableMetadataService":false,
       "skipValidateMdsInAttestationEnabled":false,
-      "assertionOptionsGenerateEndpointEnabled":true
+      "assertionOptionsGenerateEndpointEnabled":true,
+      "enterpriseAttestation":"false"
    }
 }
