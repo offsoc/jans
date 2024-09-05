@@ -34,6 +34,7 @@
     "authenticatorCertsFolder": "/etc/gluu/conf/fido2/authenticator_cert",
     "debugUserAutoEnrollment": false,
     "unfinishedRequestExpiration": 180,
-    "mdsCertsFolder": "/etc/gluu/conf/fido2/mds/cert"
+    "mdsCertsFolder": "/etc/gluu/conf/fido2/mds/cert",
+    "enterpriseAttestation":false
   }
 }

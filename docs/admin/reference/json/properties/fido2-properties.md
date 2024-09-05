@@ -291,3 +291,10 @@ tags:
 - Default value: None
 
 
+### enterpriseAttestation
+
+- Description: Boolean value to indicate if Enterprise Attestation Metadata is to be used
+
+- Required: No
+
+- Default value: None

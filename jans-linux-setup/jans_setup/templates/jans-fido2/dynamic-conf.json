@@ -43,6 +43,6 @@
       "disableMetadataService":false,
       "skipValidateMdsInAttestationEnabled":false,
       "assertionOptionsGenerateEndpointEnabled":true,
-      "enterpriseAttestation":"false"
+      "enterpriseAttestation":false
    }
 }
