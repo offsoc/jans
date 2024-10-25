@@ -195,15 +195,10 @@
 			<scope>test</scope>
 		</dependency>
 		<dependency>
-			<groupId>com.intuit.karate</groupId>
-			<artifactId>karate-junit5</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>com.intuit.karate</groupId>
-			<artifactId>karate-apache</artifactId>
-			<scope>test</scope>
-		</dependency>
+			<groupId>org.testng</groupId>
+			<artifactId>testng</artifactId>
+            <scope>test</scope>
+	    </dependency>
 		<dependency>
 			<groupId>org.junit.jupiter</groupId>
 			<artifactId>junit-jupiter-api</artifactId>
@@ -269,15 +264,15 @@
 			<filter>../profiles/${cfg}/config-build.properties</filter>
 			<filter>../profiles/${cfg}/config-api-test.properties</filter>
 		</filters>
-
+		
 		<testResources>
 			<testResource>
 				<directory>src/test/resources</directory>
 				<filtering>true</filtering>
 				<includes>
-					<include>karate.properties</include>
-					<include>karate_jenkins.properties</include>
-					<include>test.properties</include>
+					<include>**/*.xml</include>
+					<include>**/services/*</include>
+					<include>**/*.properties</include>
 					<include>*.*</include>
 				</includes>
 			</testResource>
@@ -388,27 +383,15 @@
 			<plugin>
 				<artifactId>maven-surefire-plugin</artifactId>
 				<configuration>
-					<systemPropertyVariables>
-					</systemPropertyVariables>
-					<excludedGroups>integration</excludedGroups>
-					<systemProperties>
-						<karate.options>--tags ~@ignore</karate.options>
-					</systemProperties>
+					<argLine>@{argLine}</argLine>
+
+					<failIfNoTests>false</failIfNoTests>
+					<trimStackTrace>false</trimStackTrace>
+
+					<suiteXmlFiles>
+                        <suiteXmlFile>target/test-classes/testng.xml</suiteXmlFile>
+                    </suiteXmlFiles>
 				</configuration>
-				<executions>
-					<execution>
-						<id>integration-tests</id>
-						<phase>integration-test</phase>
-						<goals>
-							<goal>test</goal>
-						</goals>
-						<configuration>
-							<failIfNoTests>false</failIfNoTests>
-							<excludedGroups>!integration</excludedGroups>
-							<groups>integration</groups>
-						</configuration>
-					</execution>
-				</executions>
 			</plugin>
 
 			<plugin>

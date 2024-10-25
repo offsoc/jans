@@ -41,7 +41,7 @@
 		<org.jboss.resteasy.client.microprofile.version>4.7.5.Final</org.jboss.resteasy.client.microprofile.version>
 
 		<rest-assured.version>5.0.1</rest-assured.version>
-		<karate.version>0.9.5</karate.version>
+		
 		<snake.version>2.0</snake.version>
 		<jupiter.version>5.7.0</jupiter.version>
 		<cucumber.version>3.8.0</cucumber.version>
@@ -328,23 +328,10 @@
 				<scope>test</scope>
 			</dependency>
 			<dependency>
-				<groupId>com.intuit.karate</groupId>
-				<artifactId>karate-junit5</artifactId>
-				<version>${karate.version}</version>
-				<scope>test</scope>
-				<exclusions>
-					<exclusion>
-						<artifactId>snakeyaml</artifactId>
-						<groupId>*</groupId>
-					</exclusion>
-				</exclusions>
-			</dependency>
-			<dependency>
-				<groupId>com.intuit.karate</groupId>
-				<artifactId>karate-apache</artifactId>
-				<version>${karate.version}</version>
-				<scope>test</scope>
-			</dependency>
+				<groupId>org.testng</groupId>
+				<artifactId>testng</artifactId>
+	            <scope>test</scope>
+		    </dependency>
 			<dependency>
 				<groupId>org.yaml</groupId>
 				<artifactId>snakeyaml</artifactId>
