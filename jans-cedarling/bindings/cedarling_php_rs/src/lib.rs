@@ -42,6 +42,14 @@ impl Cedarling {
         org_id: &str,
     ) -> PhpResult<String> {
     let userinfo_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjb3VudHJ5IjoiVVMiLCJlbWFpbCI6InVzZXJAZXhhbXBsZS5jb20iLCJ1c2VybmFtZSI6IlVzZXJOYW1lRXhhbXBsZSIsInN1YiI6ImJvRzhkZmM1TUtUbjM3bzdnc2RDZXlxTDhMcFdRdGdvTzQxbTFLWndkcTAiLCJpc3MiOiJodHRwczovL2FkbWluLXVpLXRlc3QuZ2x1dS5vcmciLCJnaXZlbl9uYW1lIjoiQWRtaW4iLCJtaWRkbGVfbmFtZSI6IkFkbWluIiwiaW51bSI6IjhkMWNkZTZhLTE0NDctNDc2Ni1iM2M4LTE2NjYzZTEzYjQ1OCIsImNsaWVudF9pZCI6IjViNDQ4N2M0LThkYjEtNDA5ZC1hNjUzLWY5MDdiODA5NDAzOSIsImF1ZCI6IjViNDQ4N2M0LThkYjEtNDA5ZC1hNjUzLWY5MDdiODA5NDAzOSIsInVwZGF0ZWRfYXQiOjE3MjQ3Nzg1OTEsIm5hbWUiOiJEZWZhdWx0IEFkbWluIFVzZXIiLCJuaWNrbmFtZSI6IkFkbWluIiwiZmFtaWx5X25hbWUiOiJVc2VyIiwianRpIjoiZmFpWXZhWUlUMGNEQVQ3Rm93MHBRdyIsImphbnNBZG1pblVJUm9sZSI6WyJhcGktYWRtaW4iXSwiZXhwIjoxNzI0OTQ1OTc4fQ.3LTc8YLvEeb7ONZp_FKA7yPP7S6e_VTzwhvAWUJrL4M".to_string();
+    // usually ResourceData will be parse from json
+    let resource_json = serde_json::json!({
+            "id": "random_id",
+            "type": "Jans::Issue",
+            "org_id": "some_long_id",
+            "country": "US",
+    });
+    
         // Perform the authorization logic
         let result = self.cedarling.authorize(Request {
             access_token: access_token.to_string(),
@@ -52,10 +60,8 @@ impl Cedarling {
             resource: ResourceData {
                 id: "random_id".to_string(),
                 resource_type: "Jans::Issue".to_string(),
-                payload: HashMap::from_iter([(
-                    "org_id".to_string(),
-                    serde_json::Value::String(org_id.to_string()),
-                )]),
+                payload: serde_json::from_value(resource_json)
+                .map_err(|err| format!("could not parse ResourceData:{err}"))?,
             },
         });
 
