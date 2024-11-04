@@ -2,10 +2,10 @@
 
 use ext_php_rs::prelude::*;
 use cedarling::{
-    BootstrapConfig, Cedarling as RustCedarling, JwtConfig, LogConfig, LogTypeConfig, PolicyStoreConfig,
+    BootstrapConfig, Cedarling as RustCedarling, JwtConfig, LogConfig, LogTypeConfig, PolicyStoreConfig, 
     PolicyStoreSource, Request, ResourceData,
 };
-use std::collections::HashMap;
+
 
 #[php_class]
 pub struct Cedarling {
@@ -16,12 +16,21 @@ pub struct Cedarling {
 impl Cedarling {
     // Define the __construct method that PHP can use to instantiate the object with dynamic parameters
     #[php_method]
-    pub fn __construct(policy_store_raw: &str, application_name: &str) -> PhpResult<Self> {
+    pub fn __construct(policy_store_raw: &str, application_name: &str, log_type_arg: &str) -> PhpResult<Self> {
         // Initialize the Cedarling instance with the BootstrapConfig using the provided parameters
+        let log_type = match log_type_arg {
+        "off" => LogTypeConfig::Off,
+        "stdout" => LogTypeConfig::StdOut,
+        "lock" => LogTypeConfig::Lock,
+        _ => {
+            eprintln!("Invalid log type, defaulting to StdOut.");
+            LogTypeConfig::StdOut
+        },
+    };
         let cedarling = RustCedarling::new(BootstrapConfig {
             application_name: application_name.to_string(),
             log_config: LogConfig {
-                log_type: LogTypeConfig::StdOut,
+                log_type: log_type,
             },
             policy_store_config: PolicyStoreConfig {
                 source: PolicyStoreSource::Json(policy_store_raw.to_string()),
