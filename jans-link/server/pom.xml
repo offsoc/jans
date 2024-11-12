@@ -43,38 +43,32 @@
         <dependency>
             <groupId>io.jans</groupId>
             <artifactId>jans-core-document-store</artifactId>
-            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>io.jans</groupId>
             <artifactId>jans-core-service</artifactId>
-            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>io.jans</groupId>
             <artifactId>jans-core-script</artifactId>
-            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>io.jans</groupId>
             <artifactId>jans-core-timer-weld</artifactId>
-            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>io.jans</groupId>
             <artifactId>jans-core-timer-weld</artifactId>
-            <scope>provided</scope>
+
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
             <version>1.7.36</version>
-            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>io.jans</groupId>
             <artifactId>jans-orm-core</artifactId>
-            <scope>provided</scope>
         </dependency>
     </dependencies>
     <build>

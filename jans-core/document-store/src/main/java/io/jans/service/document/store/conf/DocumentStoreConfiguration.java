@@ -17,7 +17,7 @@ import jakarta.enterprise.inject.Vetoed;
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 @Vetoed
-public class DocumentStoreConfiguration implements Serializable {
+public class DocumentStoreConfiguration implements Configuration,Serializable {
 
 	private static final long serialVersionUID = 2519892725606554887L;
 
