@@ -1,9 +1,7 @@
 mod utils;
 
 use cedarling::{self as core, BootstrapConfig, BootstrapConfigRaw, Request};
-// use std::collections::HashSet;
-//
-// use cedarling::*;
+use console_error_panic_hook;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -14,6 +12,8 @@ pub struct Cedarling {
 #[wasm_bindgen]
 impl Cedarling {
     pub fn new(config: JsValue) -> Result<Self, JsError> {
+        console_error_panic_hook::set_once();
+
         let config = serde_wasm_bindgen::from_value::<BootstrapConfigRaw>(config.clone())?;
         let config =
             BootstrapConfig::from_raw_config(&config).map_err(|e| JsError::new(&e.to_string()))?;
