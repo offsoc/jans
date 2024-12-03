@@ -4,7 +4,6 @@
  *
  * Copyright (c) 2024, Gluu, Inc.
  */
-
 use super::http_client::{HttpClient, HttpClientError};
 use super::{KeyId, TrustedIssuerId};
 use crate::common::policy_store::TrustedIssuer;
@@ -14,9 +13,10 @@ use serde::Deserialize;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use time::OffsetDateTime;
-
+//use tokio::runtime::Runtime;
+use tokio::runtime::{Builder as RuntimeBuilder, Runtime};
 #[derive(Deserialize)]
 struct OpenIdConfig {
     issuer: String,
@@ -155,15 +155,33 @@ impl JwkStore {
         http_client: &HttpClient,
     ) -> Result<Self, JwkStoreError> {
         // fetch openid configuration
+        //let runtime = Runtime::new().expect("Failed to create Tokio runtime");
+        let runtime = RuntimeBuilder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("Failed to create Tokio runtime");
+        let rt = Arc::new(Mutex::new(runtime));
         let response = http_client.get(&issuer.openid_configuration_endpoint)?;
-        let openid_config = response
-            .json::<OpenIdConfig>()
-            .map_err(JwkStoreError::FetchOpenIdConfig)?;
+        let openid_config: OpenIdConfig = rt.lock().unwrap().block_on(async {
+            let result = response
+                .json::<OpenIdConfig>()
+                .await
+                .map_err(JwkStoreError::FetchOpenIdConfig)
+                .unwrap();
+            result
+        });
 
         // fetch jwks
         let response = http_client.get(&openid_config.jwks_uri)?;
 
-        let jwks = response.text().map_err(JwkStoreError::FetchJwks)?;
+        let jwks: String = rt.lock().unwrap().block_on(async {
+            let res = response
+                .text()
+                .await
+                .map_err(JwkStoreError::FetchJwks)
+                .unwrap();
+            res
+        });
 
         let mut store = Self::new_from_jwks_str(store_id, &jwks)?;
         store.issuer = Some(openid_config.issuer.into());
@@ -183,8 +201,8 @@ impl JwkStore {
     }
 
     /// Returns a &Vec of all the keys without a `kid` (Key ID).
-    //  currently unused but we might need this when we try to implement support for
-    //  keys without a `kid` claim.
+    // currently unused but we might need this when we try to implement support for
+    // keys without a `kid` claim.
     #[allow(dead_code)]
     pub fn get_keys_without_id(&self) -> Vec<&DecodingKey> {
         self.keys_without_id.iter().collect()
@@ -243,22 +261,22 @@ mod test {
         let kid1 = "a50f6e70ef4b548a5fd9142eecd1fb8f54dce9ee";
         let kid2 = "73e25f9789119c7875d58087a78ac23f5ef2eda3";
         let keys_json = json!([
-            {
-                "use": "sig",
-                "e": "AQAB",
-                "alg": "RS256",
-                "n": "4VI56fF0rcWHHVgHFLHrmEO5w8oN9gbSQ9TEQnlIKRg0zCtl2dLKtt0hC6WMrTA9cF7fnK4CLNkfV_Mytk-rydu2qRV_kah62v9uZmpbS5dcz5OMXmPuQdV8fDVIvscDK5dzkwD3_XJ2mzupvQN2reiYgce6-is23vwOyuT-n4vlxSqR7dWdssK5sj9mhPBEIlfbuKNykX5W6Rgu-DyuoKArc_aukWnLxWN-yoroP2IHYdCQm7Ol08vAXmrwMyDfvsmqdXUEx4om1UZ5WLf-JNaZp4lXhgF7Cur5066213jwpp4f_D3MyR-oa43fSa91gqp2berUgUyOWdYSIshABVQ",
-                "kty": "RSA",
-                "kid": kid1,
-            },
-            {
-                "n": "tMXbmw7xEDVLLkAJdxpI-6pGywn0x9fHbD_mfgtFGZEs1LDjhDAJq6c-SoODeWQstjpetTgNqVCKOuU6zGyFPNtkDjhJqDW6THy06uJ8I85crILo3h-6NPclZ3bK9OzN5bIbzjbSvxrIM7ORZOlWzByOn5qGsMvI3aDrZ0lXNC1eCDWJpoJznG1fWcHYxbUy_CHDC3Cd26jX19aRALEEQU-y-wi9pv86qxEmrYMLsVN3__eWNNPkzxgf0eSOWFDv5_19YK7irYztqiwin6abxr9RHj3Qs21hpJ9A-YfsfmNkxmifgDeiTnXpZY8yfVTCJTtkgT7sjdU1lvhsMa4Z0w",
-                "e": "AQAB",
-                "use": "sig",
-                "alg": "RS256",
-                "kty": "RSA",
-                "kid": kid2,
-            }
+        {
+        "use": "sig",
+        "e": "AQAB",
+        "alg": "RS256",
+        "n": "4VI56fF0rcWHHVgHFLHrmEO5w8oN9gbSQ9TEQnlIKRg0zCtl2dLKtt0hC6WMrTA9cF7fnK4CLNkfV_Mytk-rydu2qRV_kah62v9uZmpbS5dcz5OMXmPuQdV8fDVIvscDK5dzkwD3_XJ2mzupvQN2reiYgce6-is23vwOyuT-n4vlxSqR7dWdssK5sj9mhPBEIlfbuKNykX5W6Rgu-DyuoKArc_aukWnLxWN-yoroP2IHYdCQm7Ol08vAXmrwMyDfvsmqdXUEx4om1UZ5WLf-JNaZp4lXhgF7Cur5066213jwpp4f_D3MyR-oa43fSa91gqp2berUgUyOWdYSIshABVQ",
+        "kty": "RSA",
+        "kid": kid1,
+        },
+        {
+        "n": "tMXbmw7xEDVLLkAJdxpI-6pGywn0x9fHbD_mfgtFGZEs1LDjhDAJq6c-SoODeWQstjpetTgNqVCKOuU6zGyFPNtkDjhJqDW6THy06uJ8I85crILo3h-6NPclZ3bK9OzN5bIbzjbSvxrIM7ORZOlWzByOn5qGsMvI3aDrZ0lXNC1eCDWJpoJznG1fWcHYxbUy_CHDC3Cd26jX19aRALEEQU-y-wi9pv86qxEmrYMLsVN3__eWNNPkzxgf0eSOWFDv5_19YK7irYztqiwin6abxr9RHj3Qs21hpJ9A-YfsfmNkxmifgDeiTnXpZY8yfVTCJTtkgT7sjdU1lvhsMa4Z0w",
+        "e": "AQAB",
+        "use": "sig",
+        "alg": "RS256",
+        "kty": "RSA",
+        "kid": kid2,
+        }
         ]);
 
         let jwks_json = json!({"keys": keys_json});
@@ -314,8 +332,8 @@ mod test {
 
         // Setup OpenId config endpoint
         let openid_config_json = json!({
-            "issuer": mock_server.url(),
-            "jwks_uri": format!("{}/jwks", mock_server.url())
+        "issuer": mock_server.url(),
+        "jwks_uri": format!("{}/jwks", mock_server.url())
         });
         let openid_config_endpoint = mock_server
             .mock("GET", "/.well-known/openid-configuration")
@@ -328,22 +346,22 @@ mod test {
         let kid1 = "a50f6e70ef4b548a5fd9142eecd1fb8f54dce9ee";
         let kid2 = "73e25f9789119c7875d58087a78ac23f5ef2eda3";
         let jwks_json = json!({
-            "keys": [
-            {
-                "use": "sig",
-                "e": "AQAB",
-                "alg": "RS256",
-                "n": "4VI56fF0rcWHHVgHFLHrmEO5w8oN9gbSQ9TEQnlIKRg0zCtl2dLKtt0hC6WMrTA9cF7fnK4CLNkfV_Mytk-rydu2qRV_kah62v9uZmpbS5dcz5OMXmPuQdV8fDVIvscDK5dzkwD3_XJ2mzupvQN2reiYgce6-is23vwOyuT-n4vlxSqR7dWdssK5sj9mhPBEIlfbuKNykX5W6Rgu-DyuoKArc_aukWnLxWN-yoroP2IHYdCQm7Ol08vAXmrwMyDfvsmqdXUEx4om1UZ5WLf-JNaZp4lXhgF7Cur5066213jwpp4f_D3MyR-oa43fSa91gqp2berUgUyOWdYSIshABVQ",
-                "kty": "RSA",
-                "kid": kid1,
-            },
-            {
-            "n": "tMXbmw7xEDVLLkAJdxpI-6pGywn0x9fHbD_mfgtFGZEs1LDjhDAJq6c-SoODeWQstjpetTgNqVCKOuU6zGyFPNtkDjhJqDW6THy06uJ8I85crILo3h-6NPclZ3bK9OzN5bIbzjbSvxrIM7ORZOlWzByOn5qGsMvI3aDrZ0lXNC1eCDWJpoJznG1fWcHYxbUy_CHDC3Cd26jX19aRALEEQU-y-wi9pv86qxEmrYMLsVN3__eWNNPkzxgf0eSOWFDv5_19YK7irYztqiwin6abxr9RHj3Qs21hpJ9A-YfsfmNkxmifgDeiTnXpZY8yfVTCJTtkgT7sjdU1lvhsMa4Z0w",
-            "e": "AQAB",
-            "use": "sig",
-            "alg": "RS256",
-            "kty": "RSA",
-            "kid": kid2,
+        "keys": [
+        {
+        "use": "sig",
+        "e": "AQAB",
+        "alg": "RS256",
+        "n": "4VI56fF0rcWHHVgHFLHrmEO5w8oN9gbSQ9TEQnlIKRg0zCtl2dLKtt0hC6WMrTA9cF7fnK4CLNkfV_Mytk-rydu2qRV_kah62v9uZmpbS5dcz5OMXmPuQdV8fDVIvscDK5dzkwD3_XJ2mzupvQN2reiYgce6-is23vwOyuT-n4vlxSqR7dWdssK5sj9mhPBEIlfbuKNykX5W6Rgu-DyuoKArc_aukWnLxWN-yoroP2IHYdCQm7Ol08vAXmrwMyDfvsmqdXUEx4om1UZ5WLf-JNaZp4lXhgF7Cur5066213jwpp4f_D3MyR-oa43fSa91gqp2berUgUyOWdYSIshABVQ",
+        "kty": "RSA",
+        "kid": kid1,
+        },
+        {
+        "n": "tMXbmw7xEDVLLkAJdxpI-6pGywn0x9fHbD_mfgtFGZEs1LDjhDAJq6c-SoODeWQstjpetTgNqVCKOuU6zGyFPNtkDjhJqDW6THy06uJ8I85crILo3h-6NPclZ3bK9OzN5bIbzjbSvxrIM7ORZOlWzByOn5qGsMvI3aDrZ0lXNC1eCDWJpoJznG1fWcHYxbUy_CHDC3Cd26jX19aRALEEQU-y-wi9pv86qxEmrYMLsVN3__eWNNPkzxgf0eSOWFDv5_19YK7irYztqiwin6abxr9RHj3Qs21hpJ9A-YfsfmNkxmifgDeiTnXpZY8yfVTCJTtkgT7sjdU1lvhsMa4Z0w",
+        "e": "AQAB",
+        "use": "sig",
+        "alg": "RS256",
+        "kty": "RSA",
+        "kid": kid2,
         }
 
         ]
@@ -421,20 +439,20 @@ mod test {
     #[test]
     fn can_load_keys_without_ids() {
         let keys_json = json!([
-            {
-                "use": "sig",
-                "e": "AQAB",
-                "alg": "RS256",
-                "n": "4VI56fF0rcWHHVgHFLHrmEO5w8oN9gbSQ9TEQnlIKRg0zCtl2dLKtt0hC6WMrTA9cF7fnK4CLNkfV_Mytk-rydu2qRV_kah62v9uZmpbS5dcz5OMXmPuQdV8fDVIvscDK5dzkwD3_XJ2mzupvQN2reiYgce6-is23vwOyuT-n4vlxSqR7dWdssK5sj9mhPBEIlfbuKNykX5W6Rgu-DyuoKArc_aukWnLxWN-yoroP2IHYdCQm7Ol08vAXmrwMyDfvsmqdXUEx4om1UZ5WLf-JNaZp4lXhgF7Cur5066213jwpp4f_D3MyR-oa43fSa91gqp2berUgUyOWdYSIshABVQ",
-                "kty": "RSA",
-            },
-            {
-                "n": "tMXbmw7xEDVLLkAJdxpI-6pGywn0x9fHbD_mfgtFGZEs1LDjhDAJq6c-SoODeWQstjpetTgNqVCKOuU6zGyFPNtkDjhJqDW6THy06uJ8I85crILo3h-6NPclZ3bK9OzN5bIbzjbSvxrIM7ORZOlWzByOn5qGsMvI3aDrZ0lXNC1eCDWJpoJznG1fWcHYxbUy_CHDC3Cd26jX19aRALEEQU-y-wi9pv86qxEmrYMLsVN3__eWNNPkzxgf0eSOWFDv5_19YK7irYztqiwin6abxr9RHj3Qs21hpJ9A-YfsfmNkxmifgDeiTnXpZY8yfVTCJTtkgT7sjdU1lvhsMa4Z0w",
-                "e": "AQAB",
-                "use": "sig",
-                "alg": "RS256",
-                "kty": "RSA",
-            }
+        {
+        "use": "sig",
+        "e": "AQAB",
+        "alg": "RS256",
+        "n": "4VI56fF0rcWHHVgHFLHrmEO5w8oN9gbSQ9TEQnlIKRg0zCtl2dLKtt0hC6WMrTA9cF7fnK4CLNkfV_Mytk-rydu2qRV_kah62v9uZmpbS5dcz5OMXmPuQdV8fDVIvscDK5dzkwD3_XJ2mzupvQN2reiYgce6-is23vwOyuT-n4vlxSqR7dWdssK5sj9mhPBEIlfbuKNykX5W6Rgu-DyuoKArc_aukWnLxWN-yoroP2IHYdCQm7Ol08vAXmrwMyDfvsmqdXUEx4om1UZ5WLf-JNaZp4lXhgF7Cur5066213jwpp4f_D3MyR-oa43fSa91gqp2berUgUyOWdYSIshABVQ",
+        "kty": "RSA",
+        },
+        {
+        "n": "tMXbmw7xEDVLLkAJdxpI-6pGywn0x9fHbD_mfgtFGZEs1LDjhDAJq6c-SoODeWQstjpetTgNqVCKOuU6zGyFPNtkDjhJqDW6THy06uJ8I85crILo3h-6NPclZ3bK9OzN5bIbzjbSvxrIM7ORZOlWzByOn5qGsMvI3aDrZ0lXNC1eCDWJpoJznG1fWcHYxbUy_CHDC3Cd26jX19aRALEEQU-y-wi9pv86qxEmrYMLsVN3__eWNNPkzxgf0eSOWFDv5_19YK7irYztqiwin6abxr9RHj3Qs21hpJ9A-YfsfmNkxmifgDeiTnXpZY8yfVTCJTtkgT7sjdU1lvhsMa4Z0w",
+        "e": "AQAB",
+        "use": "sig",
+        "alg": "RS256",
+        "kty": "RSA",
+        }
         ]);
 
         let jwks_json = json!({"keys": keys_json.clone()});
@@ -466,21 +484,21 @@ mod test {
     #[test]
     fn can_get_a_reference_to_all_keys() {
         let keys_json = json!([
-            {
-                "use": "sig",
-                "e": "AQAB",
-                "alg": "RS256",
-                "n": "4VI56fF0rcWHHVgHFLHrmEO5w8oN9gbSQ9TEQnlIKRg0zCtl2dLKtt0hC6WMrTA9cF7fnK4CLNkfV_Mytk-rydu2qRV_kah62v9uZmpbS5dcz5OMXmPuQdV8fDVIvscDK5dzkwD3_XJ2mzupvQN2reiYgce6-is23vwOyuT-n4vlxSqR7dWdssK5sj9mhPBEIlfbuKNykX5W6Rgu-DyuoKArc_aukWnLxWN-yoroP2IHYdCQm7Ol08vAXmrwMyDfvsmqdXUEx4om1UZ5WLf-JNaZp4lXhgF7Cur5066213jwpp4f_D3MyR-oa43fSa91gqp2berUgUyOWdYSIshABVQ",
-                "kty": "RSA",
-                "kid": "some_random_key_id",
-            },
-            {
-                "n": "tMXbmw7xEDVLLkAJdxpI-6pGywn0x9fHbD_mfgtFGZEs1LDjhDAJq6c-SoODeWQstjpetTgNqVCKOuU6zGyFPNtkDjhJqDW6THy06uJ8I85crILo3h-6NPclZ3bK9OzN5bIbzjbSvxrIM7ORZOlWzByOn5qGsMvI3aDrZ0lXNC1eCDWJpoJznG1fWcHYxbUy_CHDC3Cd26jX19aRALEEQU-y-wi9pv86qxEmrYMLsVN3__eWNNPkzxgf0eSOWFDv5_19YK7irYztqiwin6abxr9RHj3Qs21hpJ9A-YfsfmNkxmifgDeiTnXpZY8yfVTCJTtkgT7sjdU1lvhsMa4Z0w",
-                "e": "AQAB",
-                "use": "sig",
-                "alg": "RS256",
-                "kty": "RSA",
-            }
+        {
+        "use": "sig",
+        "e": "AQAB",
+        "alg": "RS256",
+        "n": "4VI56fF0rcWHHVgHFLHrmEO5w8oN9gbSQ9TEQnlIKRg0zCtl2dLKtt0hC6WMrTA9cF7fnK4CLNkfV_Mytk-rydu2qRV_kah62v9uZmpbS5dcz5OMXmPuQdV8fDVIvscDK5dzkwD3_XJ2mzupvQN2reiYgce6-is23vwOyuT-n4vlxSqR7dWdssK5sj9mhPBEIlfbuKNykX5W6Rgu-DyuoKArc_aukWnLxWN-yoroP2IHYdCQm7Ol08vAXmrwMyDfvsmqdXUEx4om1UZ5WLf-JNaZp4lXhgF7Cur5066213jwpp4f_D3MyR-oa43fSa91gqp2berUgUyOWdYSIshABVQ",
+        "kty": "RSA",
+        "kid": "some_random_key_id",
+        },
+        {
+        "n": "tMXbmw7xEDVLLkAJdxpI-6pGywn0x9fHbD_mfgtFGZEs1LDjhDAJq6c-SoODeWQstjpetTgNqVCKOuU6zGyFPNtkDjhJqDW6THy06uJ8I85crILo3h-6NPclZ3bK9OzN5bIbzjbSvxrIM7ORZOlWzByOn5qGsMvI3aDrZ0lXNC1eCDWJpoJznG1fWcHYxbUy_CHDC3Cd26jX19aRALEEQU-y-wi9pv86qxEmrYMLsVN3__eWNNPkzxgf0eSOWFDv5_19YK7irYztqiwin6abxr9RHj3Qs21hpJ9A-YfsfmNkxmifgDeiTnXpZY8yfVTCJTtkgT7sjdU1lvhsMa4Z0w",
+        "e": "AQAB",
+        "use": "sig",
+        "alg": "RS256",
+        "kty": "RSA",
+        }
         ]);
 
         let jwks_json = json!({"keys": keys_json.clone()});
@@ -499,36 +517,36 @@ mod test {
         let kid1 = "a50f6e70ef4b548a5fd9142eecd1fb8f54dce9ee";
         let kid2 = "73e25f9789119c7875d58087a78ac23f5ef2eda3";
         let keys_json = json!([
-            {
-                "use": "sig",
-                "e": "AQAB",
-                "alg": "RS256",
-                "n": "4VI56fF0rcWHHVgHFLHrmEO5w8oN9gbSQ9TEQnlIKRg0zCtl2dLKtt0hC6WMrTA9cF7fnK4CLNkfV_Mytk-rydu2qRV_kah62v9uZmpbS5dcz5OMXmPuQdV8fDVIvscDK5dzkwD3_XJ2mzupvQN2reiYgce6-is23vwOyuT-n4vlxSqR7dWdssK5sj9mhPBEIlfbuKNykX5W6Rgu-DyuoKArc_aukWnLxWN-yoroP2IHYdCQm7Ol08vAXmrwMyDfvsmqdXUEx4om1UZ5WLf-JNaZp4lXhgF7Cur5066213jwpp4f_D3MyR-oa43fSa91gqp2berUgUyOWdYSIshABVQ",
-                "kty": "RSA",
-                "kid": kid1,
-            },
-            {
-                "n": "tMXbmw7xEDVLLkAJdxpI-6pGywn0x9fHbD_mfgtFGZEs1LDjhDAJq6c-SoODeWQstjpetTgNqVCKOuU6zGyFPNtkDjhJqDW6THy06uJ8I85crILo3h-6NPclZ3bK9OzN5bIbzjbSvxrIM7ORZOlWzByOn5qGsMvI3aDrZ0lXNC1eCDWJpoJznG1fWcHYxbUy_CHDC3Cd26jX19aRALEEQU-y-wi9pv86qxEmrYMLsVN3__eWNNPkzxgf0eSOWFDv5_19YK7irYztqiwin6abxr9RHj3Qs21hpJ9A-YfsfmNkxmifgDeiTnXpZY8yfVTCJTtkgT7sjdU1lvhsMa4Z0w",
-                "e": "AQAB",
-                "use": "sig",
-                "alg": "RS256",
-                "kty": "RSA",
-                "kid": kid2,
-            },
-            {
-                "kty": "EC",
-                "use": "sig",
-                "key_ops_type": [],
-                "crv": "P-521",
-                "kid": "connect_190362b7-efca-4674-9cb7-21b428cb682a_sig_es512",
-                "x5c": [
-                    "MIICBjCCAWegAwIBAgIhALe16fd76pin3igeUTiLhGW01wkEMVzBsmGdXVtYpeZuMAoGCCqGSM49BAMEMCQxIjAgBgNVBAMMGUphbnMgQXV0aCBDQSBDZXJ0aWZpY2F0ZXMwHhcNMjQxMDE5MTg1NzMyWhcNMjQxMDIxMTk1NzMxWjAkMSIwIAYDVQQDDBlKYW5zIEF1dGggQ0EgQ2VydGlmaWNhdGVzMIGbMBAGByqGSM49AgEGBSuBBAAjA4GGAAQAf4TdXH7umWW64g1w8+UZ0NhyRm6rWsRGL7E+bvS2cY+K6UPThM7/xy9nTs73Pw8OT26oUhBz1oM9Jhs0Qy/veXMAvgHuUeIT6CBV3aHr4osWFAnGwoh0pjd1NOU3TN+ms1ttcD1qyJcZxLOhvFr3VZ7/7p5gSOaY1MwEEG2Ka/itQTujJzAlMCMGA1UdJQQcMBoGCCsGAQUFBwMBBggrBgEFBQcDAgYEVR0lADAKBggqhkjOPQQDBAOBjAAwgYgCQgGBq8DEjIF1SwqFos+2mHA6XFO+pZfx9HESd8dUZxN3yA5yf1oFxhUCbviQeOCeATAITuEfSIIL8hAQ4uzQc7JYhgJCAfB8/JGumVAnU/3lx2aHVl8hpSXn/f2107VN4ld46dwy3r48Ioo8dfjN2dH0BOKNg2ddYPiORfrpI9Y/WF7vI4UT"
-                ],
-                "x": "f4TdXH7umWW64g1w8-UZ0NhyRm6rWsRGL7E-bvS2cY-K6UPThM7_xy9nTs73Pw8OT26oUhBz1oM9Jhs0Qy_veXM",
-                "y": "vgHuUeIT6CBV3aHr4osWFAnGwoh0pjd1NOU3TN-ms1ttcD1qyJcZxLOhvFr3VZ7_7p5gSOaY1MwEEG2Ka_itQTs",
-                "exp": 2729540651438u64,
-                "alg": "ES512"
-            }
+        {
+        "use": "sig",
+        "e": "AQAB",
+        "alg": "RS256",
+        "n": "4VI56fF0rcWHHVgHFLHrmEO5w8oN9gbSQ9TEQnlIKRg0zCtl2dLKtt0hC6WMrTA9cF7fnK4CLNkfV_Mytk-rydu2qRV_kah62v9uZmpbS5dcz5OMXmPuQdV8fDVIvscDK5dzkwD3_XJ2mzupvQN2reiYgce6-is23vwOyuT-n4vlxSqR7dWdssK5sj9mhPBEIlfbuKNykX5W6Rgu-DyuoKArc_aukWnLxWN-yoroP2IHYdCQm7Ol08vAXmrwMyDfvsmqdXUEx4om1UZ5WLf-JNaZp4lXhgF7Cur5066213jwpp4f_D3MyR-oa43fSa91gqp2berUgUyOWdYSIshABVQ",
+        "kty": "RSA",
+        "kid": kid1,
+        },
+        {
+        "n": "tMXbmw7xEDVLLkAJdxpI-6pGywn0x9fHbD_mfgtFGZEs1LDjhDAJq6c-SoODeWQstjpetTgNqVCKOuU6zGyFPNtkDjhJqDW6THy06uJ8I85crILo3h-6NPclZ3bK9OzN5bIbzjbSvxrIM7ORZOlWzByOn5qGsMvI3aDrZ0lXNC1eCDWJpoJznG1fWcHYxbUy_CHDC3Cd26jX19aRALEEQU-y-wi9pv86qxEmrYMLsVN3__eWNNPkzxgf0eSOWFDv5_19YK7irYztqiwin6abxr9RHj3Qs21hpJ9A-YfsfmNkxmifgDeiTnXpZY8yfVTCJTtkgT7sjdU1lvhsMa4Z0w",
+        "e": "AQAB",
+        "use": "sig",
+        "alg": "RS256",
+        "kty": "RSA",
+        "kid": kid2,
+        },
+        {
+        "kty": "EC",
+        "use": "sig",
+        "key_ops_type": [],
+        "crv": "P-521",
+        "kid": "connect_190362b7-efca-4674-9cb7-21b428cb682a_sig_es512",
+        "x5c": [
+        "MIICBjCCAWegAwIBAgIhALe16fd76pin3igeUTiLhGW01wkEMVzBsmGdXVtYpeZuMAoGCCqGSM49BAMEMCQxIjAgBgNVBAMMGUphbnMgQXV0aCBDQSBDZXJ0aWZpY2F0ZXMwHhcNMjQxMDE5MTg1NzMyWhcNMjQxMDIxMTk1NzMxWjAkMSIwIAYDVQQDDBlKYW5zIEF1dGggQ0EgQ2VydGlmaWNhdGVzMIGbMBAGByqGSM49AgEGBSuBBAAjA4GGAAQAf4TdXH7umWW64g1w8+UZ0NhyRm6rWsRGL7E+bvS2cY+K6UPThM7/xy9nTs73Pw8OT26oUhBz1oM9Jhs0Qy/veXMAvgHuUeIT6CBV3aHr4osWFAnGwoh0pjd1NOU3TN+ms1ttcD1qyJcZxLOhvFr3VZ7/7p5gSOaY1MwEEG2Ka/itQTujJzAlMCMGA1UdJQQcMBoGCCsGAQUFBwMBBggrBgEFBQcDAgYEVR0lADAKBggqhkjOPQQDBAOBjAAwgYgCQgGBq8DEjIF1SwqFos+2mHA6XFO+pZfx9HESd8dUZxN3yA5yf1oFxhUCbviQeOCeATAITuEfSIIL8hAQ4uzQc7JYhgJCAfB8/JGumVAnU/3lx2aHVl8hpSXn/f2107VN4ld46dwy3r48Ioo8dfjN2dH0BOKNg2ddYPiORfrpI9Y/WF7vI4UT"
+        ],
+        "x": "f4TdXH7umWW64g1w8-UZ0NhyRm6rWsRGL7E-bvS2cY-K6UPThM7_xy9nTs73Pw8OT26oUhBz1oM9Jhs0Qy_veXM",
+        "y": "vgHuUeIT6CBV3aHr4osWFAnGwoh0pjd1NOU3TN-ms1ttcD1qyJcZxLOhvFr3VZ7_7p5gSOaY1MwEEG2Ka_itQTs",
+        "exp": 2729540651438u64,
+        "alg": "ES512"
+        }
         ]);
         let jwks_string = json!({"keys": keys_json.clone()}).to_string();
 
@@ -539,24 +557,24 @@ mod test {
         result.last_updated = OffsetDateTime::from_unix_timestamp(0).unwrap();
 
         let expected_jwkset = serde_json::from_value::<JwkSet>(json!({"keys": [
-            {
-                "use": "sig",
-                "e": "AQAB",
-                "alg": "RS256",
-                "n": "4VI56fF0rcWHHVgHFLHrmEO5w8oN9gbSQ9TEQnlIKRg0zCtl2dLKtt0hC6WMrTA9cF7fnK4CLNkfV_Mytk-rydu2qRV_kah62v9uZmpbS5dcz5OMXmPuQdV8fDVIvscDK5dzkwD3_XJ2mzupvQN2reiYgce6-is23vwOyuT-n4vlxSqR7dWdssK5sj9mhPBEIlfbuKNykX5W6Rgu-DyuoKArc_aukWnLxWN-yoroP2IHYdCQm7Ol08vAXmrwMyDfvsmqdXUEx4om1UZ5WLf-JNaZp4lXhgF7Cur5066213jwpp4f_D3MyR-oa43fSa91gqp2berUgUyOWdYSIshABVQ",
-                "kty": "RSA",
-                "kid": kid1,
-            },
-            {
-                "n": "tMXbmw7xEDVLLkAJdxpI-6pGywn0x9fHbD_mfgtFGZEs1LDjhDAJq6c-SoODeWQstjpetTgNqVCKOuU6zGyFPNtkDjhJqDW6THy06uJ8I85crILo3h-6NPclZ3bK9OzN5bIbzjbSvxrIM7ORZOlWzByOn5qGsMvI3aDrZ0lXNC1eCDWJpoJznG1fWcHYxbUy_CHDC3Cd26jX19aRALEEQU-y-wi9pv86qxEmrYMLsVN3__eWNNPkzxgf0eSOWFDv5_19YK7irYztqiwin6abxr9RHj3Qs21hpJ9A-YfsfmNkxmifgDeiTnXpZY8yfVTCJTtkgT7sjdU1lvhsMa4Z0w",
-                "e": "AQAB",
-                "use": "sig",
-                "alg": "RS256",
-                "kty": "RSA",
-                "kid": kid2,
-            },
-        ]}))
-            .expect("Should deserialize JWKS");
+ {
+ "use": "sig",
+ "e": "AQAB",
+ "alg": "RS256",
+ "n": "4VI56fF0rcWHHVgHFLHrmEO5w8oN9gbSQ9TEQnlIKRg0zCtl2dLKtt0hC6WMrTA9cF7fnK4CLNkfV_Mytk-rydu2qRV_kah62v9uZmpbS5dcz5OMXmPuQdV8fDVIvscDK5dzkwD3_XJ2mzupvQN2reiYgce6-is23vwOyuT-n4vlxSqR7dWdssK5sj9mhPBEIlfbuKNykX5W6Rgu-DyuoKArc_aukWnLxWN-yoroP2IHYdCQm7Ol08vAXmrwMyDfvsmqdXUEx4om1UZ5WLf-JNaZp4lXhgF7Cur5066213jwpp4f_D3MyR-oa43fSa91gqp2berUgUyOWdYSIshABVQ",
+ "kty": "RSA",
+ "kid": kid1,
+ },
+ {
+ "n": "tMXbmw7xEDVLLkAJdxpI-6pGywn0x9fHbD_mfgtFGZEs1LDjhDAJq6c-SoODeWQstjpetTgNqVCKOuU6zGyFPNtkDjhJqDW6THy06uJ8I85crILo3h-6NPclZ3bK9OzN5bIbzjbSvxrIM7ORZOlWzByOn5qGsMvI3aDrZ0lXNC1eCDWJpoJznG1fWcHYxbUy_CHDC3Cd26jX19aRALEEQU-y-wi9pv86qxEmrYMLsVN3__eWNNPkzxgf0eSOWFDv5_19YK7irYztqiwin6abxr9RHj3Qs21hpJ9A-YfsfmNkxmifgDeiTnXpZY8yfVTCJTtkgT7sjdU1lvhsMa4Z0w",
+ "e": "AQAB",
+ "use": "sig",
+ "alg": "RS256",
+ "kty": "RSA",
+ "kid": kid2,
+ },
+ ]}))
+ .expect("Should deserialize JWKS");
         let expected_keys = expected_jwkset
             .keys
             .iter()
