@@ -6,7 +6,6 @@
  */
 
 use std::collections::HashSet;
-
 use cedar_policy::Decision;
 use serde::ser::SerializeStruct;
 use serde::{Serialize, Serializer};

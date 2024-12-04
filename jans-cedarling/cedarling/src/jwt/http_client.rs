@@ -5,55 +5,108 @@
  * Copyright (c) 2024, Gluu, Inc.
  */
 
-#[cfg(not(target_family = "wasm"))]
-mod blocking;
-#[cfg(target_family = "wasm")]
-mod wasm;
+use reqwest::Client;
+use serde::de::DeserializeOwned;
+use tokio::{
+    runtime::{Builder as RtBuilder, Runtime},
+    time::Duration,
+};
 
-use serde::Deserialize;
-use std::time::Duration;
-
-trait HttpGet {
-    /// Sends a GET request to the specified URI
-    fn get(&self, uri: &str) -> Result<Response, HttpClientError>;
+/// A wrapper around [`reqwest::Client`] providing HTTP request functionality
+/// with retry logic.
+///
+/// The `HttpClient` struct allows for sending GET requests with a retry mechanism
+/// that attempts to fetch the requested resource up to a maximum number of times
+/// if an error occurs.
+#[derive(Debug)]
+pub struct HttpClient {
+    client: reqwest::Client,
+    max_retries: u32,
+    retry_delay: Duration,
+    rt: Runtime,
 }
 
-pub struct HttpClient {
-    client: Box<dyn HttpGet>,
+/// A wrapper around [`reqwest::Response`]
+#[derive(Debug)]
+pub struct Response<'rt> {
+    rt: &'rt Runtime,
+    resp: reqwest::Response,
+}
+
+impl Response<'_> {
+    /// Deserializes the response into <T> from JSON.
+    pub fn json<T>(self) -> Result<T, HttpClientError>
+    where
+        T: DeserializeOwned,
+    {
+        let resp_json = self
+            .rt
+            .block_on(async { self.resp.json::<T>().await })
+            .map_err(HttpClientError::DeserializeJson)?;
+        Ok(resp_json)
+    }
+
+    /// Deserializes the response into a String.
+    pub fn text(self) -> Result<String, HttpClientError> {
+        let resp_text = self
+            .rt
+            .block_on(async { self.resp.text().await })
+            .map_err(HttpClientError::DeserializeJson)?;
+        Ok(resp_text)
+    }
 }
 
 impl HttpClient {
     pub fn new(max_retries: u32, retry_delay: Duration) -> Result<Self, HttpClientError> {
-        #[cfg(not(target_family = "wasm"))]
-        let client = blocking::BlockingHttpClient::new(max_retries, retry_delay)?;
-        #[cfg(target_family = "wasm")]
-        let client = wasm::WasmHttpClient::new(max_retries, retry_delay)?;
+        let rt = RtBuilder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("Failed to create Tokio runtime");
+        let client = Client::builder()
+            .build()
+            .map_err(HttpClientError::Initialization)?;
 
         Ok(Self {
-            client: Box::new(client),
+            client,
+            max_retries,
+            retry_delay,
+            rt,
         })
     }
 
+    /// Sends a GET request to the specified URI with retry logic.
+    ///
+    /// This method will attempt to fetch the resource up to 3 times, with an increasing delay
+    /// between each attempt.
     pub fn get(&self, uri: &str) -> Result<Response, HttpClientError> {
-        self.client.get(uri)
-    }
-}
+        // Fetch the JWKS from the jwks_uri
+        let mut attempts = 0;
+        let response = self.rt.block_on(async {
+            loop {
+                match self.client.get(uri).send().await {
+                    // Exit loop on success
+                    Ok(response) => return Ok(response),
 
-#[derive(Debug)]
-pub struct Response {
-    text: String,
-}
+                    Err(e) if attempts < self.max_retries => {
+                        attempts += 1;
+                        // TODO: pass this message to the logger
+                        eprintln!(
+                            "Request failed (attempt {} of {}): {}. Retrying...",
+                            attempts, self.max_retries, e
+                        );
+                        tokio::time::sleep(self.retry_delay * attempts).await
+                    },
+                    // Exit if max retries exceeded
+                    Err(e) => return Err(HttpClientError::MaxHttpRetriesReached(e)),
+                }
+            }
+        })?;
 
-impl Response {
-    pub fn text(&self) -> &str {
-        &self.text
-    }
+        let resp = response
+            .error_for_status()
+            .map_err(HttpClientError::HttpStatus)?;
 
-    pub fn json<'a, T>(&'a self) -> Result<T, serde_json::Error>
-    where
-        T: Deserialize<'a>,
-    {
-        serde_json::from_str::<'a, T>(&self.text)
+        Ok(Response { rt: &self.rt, resp })
     }
 }
 
@@ -69,17 +122,19 @@ pub enum HttpClientError {
     /// Indicates a failure to reach the endpoint after 3 attempts.
     #[error("Could not reach endpoint after trying 3 times: {0}")]
     MaxHttpRetriesReached(#[source] reqwest::Error),
-    /// Indicates a failure decode the response body to UTF-8
-    #[error("Failed to decode the server's response to UTF-8: {0}")]
-    DecodeResponseUtf8(#[source] reqwest::Error),
+    /// Indicates a failure to deserialize the http response into JSON.
+    #[error("Failed to deserialize response into JSON: {0}")]
+    DeserializeJson(#[source] reqwest::Error),
+    /// Indicates a failure to deserialize the http response into JSON.
+    #[error("Failed to deserialize response into a String: {0}")]
+    DeserializeText(#[source] reqwest::Error),
 }
 
 #[cfg(test)]
 mod test {
     use crate::jwt::http_client::{HttpClient, HttpClientError};
-
     use mockito::Server;
-    use serde_json::json;
+    use serde_json::{json, Value};
     use std::time::Duration;
     use test_utils::assert_eq;
 
@@ -101,7 +156,7 @@ mod test {
             .create();
 
         let client =
-            HttpClient::new(3, Duration::from_millis(1)).expect("Should create HttpClient.");
+            HttpClient::new(3, Duration::from_millis(10)).expect("Should create HttpClient.");
 
         let response = client
             .get(&format!(
@@ -109,8 +164,8 @@ mod test {
                 mock_server.url()
             ))
             .expect("Should get response")
-            .json::<serde_json::Value>()
-            .expect("Should deserialize JSON response.");
+            .json::<Value>()
+            .expect("Should deserialize response to JSON");
 
         assert_eq!(
             response, expected,
