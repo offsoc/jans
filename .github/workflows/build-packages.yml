@@ -337,6 +337,7 @@ jobs:
         mkdir wasm
         tar -xvf cedarling_wasm.tar.gz -C wasm
         rm cedarling_wasm.tar.gz
+        git add wasm
         ls wasm
         # END Get the latest cedarling wasm package
         npm install
