@@ -10,7 +10,7 @@ use uuid7::{Uuid, uuid4};
 /// Value is used as ID for application
 /// represents a unique ID for application
 /// generated one on startup
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct PdpID(pub Uuid);
 
 impl PdpID {

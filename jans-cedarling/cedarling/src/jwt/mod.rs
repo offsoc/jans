@@ -14,21 +14,24 @@
 mod issuers_store;
 mod jwk_store;
 mod key_service;
+mod logger;
 #[cfg(test)]
 mod test_utils;
 mod token;
 mod validator;
 
+pub use jsonwebtoken::Algorithm;
+use logger::Logger;
+pub use token::{Token, TokenClaimTypeError, TokenClaims, TokenStr};
+
+use crate::common::app_types::{ApplicationName, PdpID};
+use crate::common::policy_store::TrustedIssuer;
+use crate::log::LogStrategy;
+use crate::{JwtConfig, LogConfig};
+use key_service::{KeyService, KeyServiceError};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-
-pub use jsonwebtoken::Algorithm;
-use key_service::{KeyService, KeyServiceError};
-pub use token::{Token, TokenClaimTypeError, TokenClaims, TokenStr};
 use validator::{JwtValidator, JwtValidatorConfig, JwtValidatorError};
-
-use crate::common::policy_store::TrustedIssuer;
-use crate::JwtConfig;
 
 /// Type alias for Trusted Issuers' ID.
 type TrustedIssuerId = Arc<str>;
@@ -92,20 +95,26 @@ pub struct JwtService {
     access_tkn_validator: JwtValidator,
     id_tkn_validator: JwtValidator,
     userinfo_tkn_validator: JwtValidator,
+    logger: Logger,
 }
 
 impl JwtService {
     pub async fn new(
         config: &JwtConfig,
         trusted_issuers: Option<HashMap<String, TrustedIssuer>>,
+        log_service: Arc<LogStrategy>,
+        pdp_id: PdpID,
+        app_id: Option<ApplicationName>,
     ) -> Result<Self, JwtServiceInitError> {
+        let logger = Logger::new(log_service, pdp_id, app_id);
+
         let key_service: Arc<_> =
             match (&config.jwt_sig_validation, &config.jwks, &trusted_issuers) {
                 // Case: no JWKS provided
                 (true, None, None) => Err(JwtServiceInitError::MissingJwksConfig)?,
                 // Case: Trusted issuers provided
                 (true, None, Some(issuers)) => Some(
-                    KeyService::new_from_trusted_issuers(issuers)
+                    KeyService::new_from_trusted_issuers(issuers, Some(&logger))
                         .await
                         .map_err(JwtServiceInitError::KeyService)?,
                 ),
@@ -170,7 +179,26 @@ impl JwtService {
             access_tkn_validator,
             id_tkn_validator,
             userinfo_tkn_validator,
+            logger,
         })
+    }
+
+    pub(crate) async fn new_without_logging(
+        config: &JwtConfig,
+        trusted_issuers: Option<HashMap<String, TrustedIssuer>>,
+    ) -> Result<Self, JwtServiceInitError> {
+        let log_service = LogStrategy::new(&LogConfig {
+            log_type: crate::LogTypeConfig::Off,
+            log_level: crate::LogLevel::FATAL,
+        });
+        Self::new(
+            config,
+            trusted_issuers,
+            Arc::new(log_service),
+            PdpID::new(),
+            None,
+        )
+        .await
     }
 
     pub async fn process_token<'a>(
@@ -208,16 +236,14 @@ impl JwtService {
 
 #[cfg(test)]
 mod test {
-    use std::collections::HashSet;
-
-    use jsonwebtoken::Algorithm;
-    use serde_json::json;
-    use test_utils::assert_eq;
-    use tokio::test;
-
     use super::test_utils::*;
     use super::{JwtService, Token, TokenClaims, TokenStr};
     use crate::{JwtConfig, TokenValidationConfig};
+    use jsonwebtoken::Algorithm;
+    use serde_json::json;
+    use std::collections::HashSet;
+    use test_utils::assert_eq;
+    use tokio::test;
 
     #[test]
     pub async fn can_validate_token() {
@@ -254,7 +280,7 @@ mod test {
         // Prepare JWKS
         let local_jwks = json!({"test_idp": generate_jwks(&vec![keys]).keys}).to_string();
 
-        let jwt_service = JwtService::new(
+        let jwt_service = JwtService::new_without_logging(
             &JwtConfig {
                 jwks: Some(local_jwks),
                 jwt_sig_validation: true,

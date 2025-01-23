@@ -12,6 +12,7 @@ use serde_json::{Value, json};
 
 use super::TrustedIssuerId;
 use super::jwk_store::{JwkStore, JwkStoreError};
+use super::logger::Logger;
 use crate::common::policy_store::TrustedIssuer;
 use crate::http::{HttpClient, HttpClientError};
 
@@ -56,7 +57,10 @@ impl KeyService {
         for (iss_id, keys) in &parsed_stores {
             let iss_id = TrustedIssuerId::from(iss_id.as_str());
             let jwks = json!({"keys": keys});
-            key_stores.insert(iss_id.clone(), JwkStore::new_from_jwks_value(iss_id, jwks)?);
+            key_stores.insert(
+                iss_id.clone(),
+                JwkStore::new_from_jwks_value(iss_id, jwks, None)?,
+            );
         }
         Ok(Self { key_stores })
     }
@@ -66,6 +70,7 @@ impl KeyService {
     /// Enables loading key stores from a local JSON file.
     pub async fn new_from_trusted_issuers(
         trusted_issuers: &HashMap<String, TrustedIssuer>,
+        logger: Option<&Logger>,
     ) -> Result<Self, KeyServiceError> {
         let http_client = HttpClient::new(3, Duration::from_secs(3))?;
 
@@ -74,7 +79,7 @@ impl KeyService {
             let iss_id: Arc<str> = iss_id.as_str().into();
             key_stores.insert(
                 iss_id.clone(),
-                JwkStore::new_from_trusted_issuer(iss_id, iss, &http_client).await?,
+                JwkStore::new_from_trusted_issuer(iss_id, iss, &http_client, logger).await?,
             );
         }
 
@@ -246,26 +251,29 @@ mod test {
             .expect(1)
             .create();
 
-        let key_service = KeyService::new_from_trusted_issuers(&HashMap::from([
-            ("first".to_string(), TrustedIssuer {
-                name: "First IDP".to_string(),
-                description: "".to_string(),
-                openid_configuration_endpoint: format!(
-                    "{}/first/.well-known/openid-configuration",
-                    mock_server.url()
-                ),
-                ..Default::default()
-            }),
-            ("second".to_string(), TrustedIssuer {
-                name: "Second IDP".to_string(),
-                description: "".to_string(),
-                openid_configuration_endpoint: format!(
-                    "{}/second/.well-known/openid-configuration",
-                    mock_server.url()
-                ),
-                ..Default::default()
-            }),
-        ]))
+        let key_service = KeyService::new_from_trusted_issuers(
+            &HashMap::from([
+                ("first".to_string(), TrustedIssuer {
+                    name: "First IDP".to_string(),
+                    description: "".to_string(),
+                    openid_configuration_endpoint: format!(
+                        "{}/first/.well-known/openid-configuration",
+                        mock_server.url()
+                    ),
+                    ..Default::default()
+                }),
+                ("second".to_string(), TrustedIssuer {
+                    name: "Second IDP".to_string(),
+                    description: "".to_string(),
+                    openid_configuration_endpoint: format!(
+                        "{}/second/.well-known/openid-configuration",
+                        mock_server.url()
+                    ),
+                    ..Default::default()
+                }),
+            ]),
+            None,
+        )
         .await
         .expect("Should load KeyService from trusted issuers");
 

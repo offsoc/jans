@@ -137,6 +137,7 @@ impl BootstrapConfig {
                 exp_validation: raw.userinfo_exp_validation.into(),
                 ..Default::default()
             },
+            ..Default::default()
         };
 
         let authorization_config = AuthorizationConfig {

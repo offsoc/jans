@@ -3,9 +3,8 @@
 //
 // Copyright (c) 2024, Gluu, Inc.
 
-use crate::{
-    authorization_config::IdTokenTrustMode, AuthorizationConfig, JwtConfig, WorkloadBoolOp,
-};
+use crate::authorization_config::IdTokenTrustMode;
+use crate::{AuthorizationConfig, JwtConfig, WorkloadBoolOp};
 pub use crate::{
     BootstrapConfig, BootstrapConfigRaw, Cedarling, FeatureToggle, LogConfig, LogTypeConfig,
     PolicyStoreConfig, PolicyStoreSource,

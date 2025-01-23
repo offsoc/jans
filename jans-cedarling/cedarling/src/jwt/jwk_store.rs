@@ -3,20 +3,18 @@
 //
 // Copyright (c) 2024, Gluu, Inc.
 
-use std::collections::{HashMap, HashSet};
-use std::fmt::Debug;
-use std::sync::Arc;
-
-use jsonwebtoken::DecodingKey;
-use jsonwebtoken::jwk::Jwk;
-
-use serde::Deserialize;
-use serde_json::Value;
-use time::OffsetDateTime;
-
+use super::logger::Logger;
 use super::{KeyId, TrustedIssuerId};
 use crate::common::policy_store::TrustedIssuer;
 use crate::http::{HttpClient, HttpClientError};
+use jsonwebtoken::DecodingKey;
+use jsonwebtoken::jwk::Jwk;
+use serde::Deserialize;
+use serde_json::Value;
+use std::collections::{HashMap, HashSet};
+use std::fmt::Debug;
+use std::sync::Arc;
+use time::OffsetDateTime;
 
 #[derive(Deserialize)]
 struct OpenIdConfig {
@@ -84,21 +82,33 @@ impl PartialEq for JwkStore {
 
 impl JwkStore {
     /// Creates a JwkStore from a [`serde_json::Value`]
-    pub fn new_from_jwks_value(store_id: Arc<str>, jwks: Value) -> Result<Self, JwkStoreError> {
+    pub fn new_from_jwks_value(
+        store_id: Arc<str>,
+        jwks: Value,
+        logger: Option<&Logger>,
+    ) -> Result<Self, JwkStoreError> {
         let jwks =
             serde_json::from_value::<IntermediateJwks>(jwks).map_err(JwkStoreError::DecodeJwk)?;
-        Self::new_from_jwks(store_id, jwks)
+        Self::new_from_jwks(store_id, jwks, logger)
     }
 
     /// Creates a JwkStore from a [`String`]
-    pub fn new_from_jwks_str(store_id: Arc<str>, jwks: &str) -> Result<Self, JwkStoreError> {
+    pub fn new_from_jwks_str(
+        store_id: Arc<str>,
+        jwks: &str,
+        logger: Option<&Logger>,
+    ) -> Result<Self, JwkStoreError> {
         let jwks =
             serde_json::from_str::<IntermediateJwks>(jwks).map_err(JwkStoreError::DecodeJwk)?;
-        Self::new_from_jwks(store_id, jwks)
+        Self::new_from_jwks(store_id, jwks, logger)
     }
 
     /// Creates a JwkStore from an [`IntermediateJwks`]
-    fn new_from_jwks(store_id: Arc<str>, jwks: IntermediateJwks) -> Result<Self, JwkStoreError> {
+    fn new_from_jwks(
+        store_id: Arc<str>,
+        jwks: IntermediateJwks,
+        logger: Option<&Logger>,
+    ) -> Result<Self, JwkStoreError> {
         let mut keys = HashMap::new();
         let mut keys_without_id = Vec::new();
 
@@ -116,11 +126,12 @@ impl JwkStore {
                     // if the error indicates an unknown variant,
                     // we can safely ignore it.
                     if e.to_string().contains("unknown variant") {
-                        // TODO: pass this message to the logger
-                        eprintln!(
-                            "Encountered a JWK with an unsupported algorithm, ignoring it: {}",
-                            e
-                        );
+                        if let Some(logger) = logger {
+                            logger.system_debug(format!(
+                                "Encountered a JWK with an unsupported algorithm, ignoring it: {}",
+                                e
+                            ));
+                        }
                         continue;
                     } else {
                         Err(JwkStoreError::DecodeJwk(e))?
@@ -158,6 +169,7 @@ impl JwkStore {
         store_id: TrustedIssuerId,
         issuer: &TrustedIssuer,
         http_client: &HttpClient,
+        logger: Option<&Logger>,
     ) -> Result<Self, JwkStoreError> {
         // fetch openid configuration
         let response = http_client
@@ -170,7 +182,7 @@ impl JwkStore {
         // fetch jwks
         let response = http_client.get(&openid_config.jwks_uri).await?;
 
-        let mut store = Self::new_from_jwks_str(store_id, response.text())?;
+        let mut store = Self::new_from_jwks_str(store_id, response.text(), logger)?;
         store.issuer = Some(openid_config.issuer.into());
         store.source_iss = Some(issuer.clone());
 
@@ -270,7 +282,7 @@ mod test {
         ]);
 
         let jwks_json = json!({"keys": keys_json});
-        let mut result = JwkStore::new_from_jwks_str("test".into(), &jwks_json.to_string())
+        let mut result = JwkStore::new_from_jwks_str("test".into(), &jwks_json.to_string(), None)
             .expect("Should create JwkStore");
         // We edit the `last_updated` from the result so that the comparison
         // wont fail because of the timestamp.
@@ -375,7 +387,7 @@ mod test {
         };
 
         let mut result =
-            JwkStore::new_from_trusted_issuer("test".into(), &source_iss, &http_client)
+            JwkStore::new_from_trusted_issuer("test".into(), &source_iss, &http_client, None)
                 .await
                 .expect("Should load JwkStore from Trusted Issuer");
         // We edit the `last_updated` from the result so that the comparison
@@ -445,7 +457,7 @@ mod test {
         ]);
 
         let jwks_json = json!({"keys": keys_json.clone()});
-        let mut result = JwkStore::new_from_jwks_str("test".into(), &jwks_json.to_string())
+        let mut result = JwkStore::new_from_jwks_str("test".into(), &jwks_json.to_string(), None)
             .expect("Should create JwkStore");
         // We edit the `last_updated` from the result so that the comparison
         // wont fail because of the timestamp.
@@ -492,7 +504,7 @@ mod test {
 
         let jwks_json = json!({"keys": keys_json.clone()});
 
-        let mut result = JwkStore::new_from_jwks_str("test".into(), &jwks_json.to_string())
+        let mut result = JwkStore::new_from_jwks_str("test".into(), &jwks_json.to_string(), None)
             .expect("Should create JwkStore");
         // We edit the `last_updated` from the result so that the comparison
         // wont fail because of the timestamp.
@@ -539,7 +551,7 @@ mod test {
         ]);
         let jwks_string = json!({"keys": keys_json.clone()}).to_string();
 
-        let mut result = JwkStore::new_from_jwks_str("test".into(), &jwks_string)
+        let mut result = JwkStore::new_from_jwks_str("test".into(), &jwks_string, None)
             .expect("Should create JwkStore");
         // We edit the `last_updated` from the result so that the comparison
         // wont fail because of the timestamp.

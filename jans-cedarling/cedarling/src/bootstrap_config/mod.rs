@@ -160,15 +160,13 @@ pub enum BootstrapConfigLoadingError {
 
 #[cfg(test)]
 mod test {
-    use std::collections::HashSet;
-    use std::path::Path;
-
-    use jsonwebtoken::Algorithm;
-    use test_utils::assert_eq;
-
     use super::raw_config::BootstrapConfigRaw;
     use super::*;
     use crate::{BootstrapConfig, LogConfig, LogTypeConfig, MemoryLogConfig, PolicyStoreConfig};
+    use jsonwebtoken::Algorithm;
+    use std::collections::HashSet;
+    use std::path::Path;
+    use test_utils::assert_eq;
 
     #[test]
     fn can_deserialize_from_json() {
