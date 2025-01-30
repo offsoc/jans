@@ -46,7 +46,7 @@ public class NullMessageConsumer extends MessageConsumer {
 	@Override
 	@Asynchronous
 	public void onMessage(String channel, String message) {
-		log.info("onMessage {} : {} : {}", channel, message);
+		log.info("onMessage {} : {} : {", channel, message);
 	}
 
 	@Override
