@@ -217,4 +217,150 @@ mod test_deserialize_json_cedar_schema {
             namespaces: HashMap::from([("Jans".into(), namespace)])
         });
     }
+
+    /// Tests if the entity can be found in the given `default_namespace`
+    #[test]
+    fn can_get_entity_from_default_namespace() {
+        let schema = serde_json::from_value::<CedarSchemaJson>(json!({
+            "Jans": {
+                "entityTypes": {
+                    "Workload": {
+                        "shape": {
+                            "type": "Record",
+                            "attributes":  {},
+                        }
+                    }
+                }
+            },
+        }))
+        .expect("should successfully build schema");
+        assert!(
+            schema.namespaces.contains_key("Jans"),
+            "schema should contain the \"Jans\" namespace"
+        );
+
+        let (entity_type_name, entity_type) = schema
+            .get_entity_schema("Workload", Some("Jans"))
+            .expect("should not error while calling getting schema for Workload")
+            .expect("should find workload entity in schema");
+        assert_eq!(
+            entity_type_name,
+            cedar_policy::EntityTypeName::from_str("Jans::Workload")
+                .expect("should parse workload entity type name")
+        );
+        assert_eq!(entity_type, &EntityType {
+            member_of: None,
+            shape: Some(EntityShape {
+                required: true,
+                attrs: HashMap::new()
+            }),
+            tags: None,
+        });
+    }
+
+    /// Tests if the entity wont be found if it's not in the `""` namespace or
+    /// in the given `default_namespace`
+    #[test]
+    fn should_not_get_entity_from_another_namespace() {
+        let schema = serde_json::from_value::<CedarSchemaJson>(json!({
+            "Custom": {
+                "entityTypes": {
+                    "Another_entity": {},
+                }
+            }
+        }))
+        .expect("should successfully build schema");
+        assert!(
+            schema.namespaces.contains_key("Custom"),
+            "schema should contain the \"Custom\" namespace"
+        );
+
+        let result = schema
+            .get_entity_schema("Another_entity", Some("Jans"))
+            .expect("should not error while calling getting schema for Another_entity");
+        assert_eq!(result, None);
+    }
+
+    // Test if the entity can be found on the `""` namespace if it's not
+    // in the given `default_namespace`
+    #[test]
+    fn should_get_entity_from_default_namespace() {
+        let schema = serde_json::from_value::<CedarSchemaJson>(json!({
+            "": {
+                "entityTypes": {
+                    "Some_entity": {},
+                }
+            },
+        }))
+        .expect("should successfully build schema");
+        assert!(
+            schema.namespaces.contains_key(""),
+            "schema should countain the `\"\"` namespace"
+        );
+
+        let (entity_type_name, entity_type) = schema
+            .get_entity_schema("Some_entity", Some("Jans"))
+            .expect("should not error while calling getting schema for Some_entity")
+            .expect("should find Some_entity in schema");
+        assert_eq!(
+            entity_type_name,
+            cedar_policy::EntityTypeName::from_str("Some_entity")
+                .expect("should parse Some_entity entity type name")
+        );
+        assert_eq!(entity_type, &EntityType {
+            member_of: None,
+            shape: Some(EntityShape {
+                required: true,
+                attrs: HashMap::new()
+            }),
+            tags: None,
+        });
+    }
+
+    #[test]
+    fn can_get_entity_from_namespace() {
+        let schema = serde_json::from_value::<CedarSchemaJson>(json!({
+            "Jans": {
+                "entityTypes": {
+                    "SomeEntity": {
+                        "shape": {
+                            "type": "Record",
+                            "attributes":  {},
+                        }
+                    }
+                }
+            },
+            "": {
+                "entityTypes": {
+                    "AnotherEntity": {
+                        "shape": {
+                            "type": "Record",
+                            "attributes":  {},
+                        }
+                    }
+                }
+            },
+        }))
+        .expect("should successfully build schema");
+        assert_eq!(
+            schema
+                .namespaces
+                .keys()
+                .map(|k| k.as_str())
+                .collect::<HashSet<&str>>(),
+            HashSet::from(["", "Jans"])
+        );
+        assert!(
+            schema
+                .get_entity_schema_from_namespace("Jans", "SomeEntity")
+                .is_some(),
+            "should get entity from \"Jans\" namespace"
+        );
+        assert!(
+            schema
+                .get_entity_schema_from_namespace("", "AnotherEntity")
+                .is_some(),
+            "should get entity from `\"\"` namespace"
+        );
+    }
 }
