@@ -20,6 +20,7 @@ mod init;
 mod jwt;
 mod lock;
 mod log;
+mod metrics;
 
 #[cfg(not(target_arch = "wasm32"))]
 #[cfg(feature = "blocking")]
