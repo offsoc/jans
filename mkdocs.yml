@@ -407,6 +407,7 @@ nav:
       - Using jans-link: janssen-server/usermgmt/usermgmt-jans-link.md
 - Cedarling:
   - Overview: 'cedarling/cedarling-overview.md'
+  - Cedarling Quick Start Guide: 'cedarling/cedarling-quick-start-guide.md'
   - Authz: 'cedarling/cedarling-authz.md'
   - Policy Store: 'cedarling/cedarling-policy-store.md'
   - JWT: 'cedarling/cedarling-jwt.md'
