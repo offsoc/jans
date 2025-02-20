@@ -70,10 +70,6 @@ end
 
 ```
 
-
-
-
-
 ## Prerequisites
 
 Before you begin, make sure you have the following:
@@ -84,7 +80,7 @@ Before you begin, make sure you have the following:
 
 ## Policy Store Setup (Agama Lab)
 
-To begin using Cedarling, you need to set up a policy store. We’ll use this `Agama Lab` for this purpose.
+To begin using Cedarling, you need to set up a policy store. We’ll use this [Agama Lab](https://cloud.gluu.org/agama-lab/login) for this purpose.
 
 1. Sign in to Agama Lab using your GitHub account and click on Policy Designer.
    ![image](../assets/cedarling-policy-designer.png)
@@ -165,13 +161,13 @@ Create a file named `bootstrap.json`. You may use the [sample](https://github.co
 
  Pull the Docker image:
 
- ```
+ ```bash
  docker pull ghcr.io/janssenproject/jans/cedarling-flask-sidecar:0.0.0-nightly
  ```
 
  Run the Docker image, replacing `</absolute/path/to/bootstrap.json>` with the absolute path to your bootstrap file:
 
-```
+```bash
 docker run -e APP_MODE='development' -e CEDARLING_BOOTSTRAP_CONFIG_FILE=/bootstrap.json -e SIDECAR_DEBUG_RESPONSE=True --mount type=bind,src=</absolute/path/to/bootstrap.json>,dst=/bootstrap.json -p 5000:5000 -d ghcr.io/janssenproject/jans/cedarling-flask-sidecar:0.0.0-nightly
 ```
 
@@ -183,7 +179,7 @@ it is your Docker container ID.
 * Clone the Janssen repository and navigate to `jans/jans-cedarling/flask-sidecar`.
 * Run `poetry install` to install dependencies.
 * Download and install the latest Cedarling nightly wheel:
-```
+```bash
 wget https://github.com/JanssenProject/jans/releases/download/nightly/cedarling_python-0.0.0-cp310-cp310-manylinux_2_31_x86_64.whl
 ```
 * Install the nightly wheel: poetry run 
@@ -304,10 +300,10 @@ curl http://127.0.0.1:5001/protected -H "Authorization: Bearer eyJraWQiOiJjb25uZ
 
 The cedarling decision log will be outputted by the Docker container or directly by the API to stdout. In the case of Docker, this can be retrieved like so:
 
-```
+```bash
 $ docker logs <container ID>
 ```
-```
+```json
 {
   "request_id": "0194cdbc-b8c7-798d-8cc8-fb483448e6fa",
   "timestamp": "2025-02-03T21:34:44.935Z",
@@ -333,3 +329,89 @@ $ docker logs <container ID>
 }
 ```
 
+
+## Update Policy
+
+Now, we will update the policy. Previously, we were checking the `scope` in the access token, but now we will check if the `acr` value is available in the access token or not.
+
+Before the update the policy, first needs to update the schema. 
+
+Steps to Update the Schema:
+
+1. Go to the `Policy Designer`.
+2. Navigate to `Schema` → `Entity Types`.
+3. Edit the `access_token` entity type.
+4. Add a new field `acr` with the type set to `String`.
+5. Save the schema.
+
+Once the schema has been updated, your new updated Access_token entity type json will look like this:
+
+Updated Access_token entity type json:
+
+```json
+{
+  "shape": {
+    "type": "Record",
+    "attributes": {
+      "aud": {
+        "type": "EntityOrCommon",
+        "name": "String"
+      },
+      "exp": {
+        "type": "EntityOrCommon",
+        "name": "Long"
+      },
+      "iat": {
+        "type": "EntityOrCommon",
+        "name": "Long"
+      },
+      "iss": {
+        "type": "EntityOrCommon",
+        "name": "TrustedIssuer"
+      },
+      "jti": {
+        "type": "EntityOrCommon",
+        "required": false,
+        "name": "String"
+      },
+      "nbf": {
+        "type": "EntityOrCommon",
+        "required": false,
+        "name": "Long"
+      },
+      "scope": {
+        "type": "Set",
+        "required": false,
+        "element": {
+          "type": "EntityOrCommon",
+          "name": "String"
+        }
+      },
+      "acr": {
+        "type": "String",
+        "required": false
+      }
+    }
+  }
+}
+```
+
+Below is the updated Cedar policy:
+
+```
+@id("allow_one")
+permit(
+  principal is gatewayDemo::Workload,
+  action == gatewayDemo::Action::"GET",
+  resource is gatewayDemo::HTTP_Request
+)
+when {
+  principal has access_token.acr &&
+  principal.acr == "simple_password_auth"
+};
+```
+### Explanation of the Changes:
+
+**Schema Update:** The new field `acr` is added to the `access_token` entity type with a type of String. This represents the Authentication Context Class Reference.
+
+**Policy Update:** The policy now checks whether the `acr` value in the access token is present and matches `simple_password_auth`.
