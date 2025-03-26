@@ -1,6 +1,7 @@
 package io.jans.as.model.ssa;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.google.common.collect.Lists;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -27,6 +28,10 @@ public class SsaConfiguration {
     }
 
     public List<String> getSsaCustomAttributes() {
+        //if(ssaCustomAttributes == null) {
+            ssaCustomAttributes = Lists.newArrayList();
+        ssaCustomAttributes.add("test");
+        //}
         return ssaCustomAttributes;
     }
 
